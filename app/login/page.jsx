@@ -95,7 +95,7 @@ const Login = () => {
           <div className="flex items-center justify-center gap-3 pt-4 text-center">
             <span className="w-1/4 bg-gray-200 h-[1px] block"></span>
             <p className="text-xs text-gray-500 whitespace-nowrap">
-              Don't have an account?{' '}
+              Do not have an account? {' '}
               <Link href="/register" className="text-primary font-medium hover:underline">
                 Sign up
               </Link>

@@ -1,12 +1,11 @@
 "use client"
 import { useState, useMemo } from 'react';
 
-const AttendanceLogsTable = ({ logs }) => {
+const AttendanceLogsTable = ({ logs, employees = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // دالة مساعدة لتنسيق الوقت والتاريخ
   const formatDateTime = (isoString) => {
     if (!isoString) return { date: '--', time: '--' };
     const d = new Date(isoString);
@@ -16,11 +15,23 @@ const AttendanceLogsTable = ({ logs }) => {
     };
   };
 
-  // تصفية السجلات (Filtering) بناءً على مدخلات المشرف
+  const processedLogs = useMemo(() => {
+    return logs.map(log => {
+      const matchedEmployee = employees.find(
+        emp => emp.rfidTag?.trim().toUpperCase() === log.rfidTag?.trim().toUpperCase()
+      );
+
+      return {
+        ...log,
+        realEmployeeName: matchedEmployee ? matchedEmployee.name : (log.employeeName || "Unknown Card")
+      };
+    });
+  }, [logs, employees]);
+
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => {
+    return processedLogs.filter(log => {
       const matchesSearch = 
-        (log.employeeName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (log.realEmployeeName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (log.rfidTag?.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const logDate = log.timestamp ? new Date(log.timestamp).toISOString().split('T')[0] : '';
@@ -30,22 +41,20 @@ const AttendanceLogsTable = ({ logs }) => {
 
       return matchesSearch && matchesDate && matchesStatus;
     });
-  }, [logs, searchTerm, dateFilter, statusFilter]);
+  }, [processedLogs, searchTerm, dateFilter, statusFilter]);
 
-  // الخوارزمية السحرية لتصدير البيانات إلى ملف Excel (CSV) بدون مكتبات خارجية
   const exportToCSV = () => {
     if (filteredLogs.length === 0) {
       alert("لا توجد بيانات لتصديرها!");
       return;
     }
 
-    // تعريف العناوين (Headers) مع دعم الترميز العربي UTF-8
     const csvContent = [
-      ["الموظف", "رقم الكرت UID", "التاريخ", "التوقيت", "الحالة"], // السطر الأول
+      ["الموظف", "رقم الكرت UID", "التاريخ", "التوقيت", "الحالة"],
       ...filteredLogs.map(log => {
         const { date, time } = formatDateTime(log.timestamp);
         return [
-          log.employeeName || "كرت غير معرف",
+          log.realEmployeeName,
           log.rfidTag,
           date,
           time,
@@ -56,7 +65,6 @@ const AttendanceLogsTable = ({ logs }) => {
     .map(e => e.map(val => `"${val}"`).join(","))
     .join("\n");
 
-    // إنشاء رابط التحميل التلقائي للملف
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -70,19 +78,16 @@ const AttendanceLogsTable = ({ logs }) => {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in duration-300 text-right" dir="rtl">
       
-      {/* أدوات الفلترة والبحث والتصدير */}
       <div className="p-5 sm:p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row gap-4 justify-between items-center">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full md:w-auto flex-1">
-          {/* البحث النصي */}
           <input 
             type="text" 
-            placeholder="ابحث باسم الموظف أو الـ UID..." 
+            placeholder="Search by Name or UID..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-primary transition-all"
+            className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-primary transition-all text-left"
           />
           
-          {/* فلتر التاريخ */}
           <input 
             type="date" 
             value={dateFilter}
@@ -90,28 +95,25 @@ const AttendanceLogsTable = ({ logs }) => {
             className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-primary transition-all text-right"
           />
 
-          {/* فلتر الحالة */}
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-primary transition-all font-sans"
+            className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-primary transition-all font-sans text-left"
           >
-            <option value="all">جميع الحالات</option>
-            <option value="Check-in">دخول (Check-in)</option>
-            <option value="Check-out">انصراف (Check-out)</option>
+            <option value="all">All Options</option>
+            <option value="Check-in">Enter (Check-in)</option>
+            <option value="Check-out">Exit (Check-out)</option>
           </select>
         </div>
 
-        {/* زر تصدير التقرير */}
         <button 
           onClick={exportToCSV}
           className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-medium text-sm py-2 px-5 rounded-xl shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
         >
-          📊 تصدير لـ Excel
+          📊 Export to Excel
         </button>
       </div>
 
-      {/* الجدول المعروض بناءً على الفلترة */}
       <div className="w-full overflow-x-auto">
         <table className="w-full text-right min-w-[600px]" dir="ltr"> 
           <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider text-left">
@@ -126,7 +128,7 @@ const AttendanceLogsTable = ({ logs }) => {
             {filteredLogs.length === 0 ? (
               <tr>
                 <td colSpan="4" className="px-6 py-10 text-center text-gray-400 font-sans">
-                  لا توجد سجلات مطابقة لخيارات البحث الحالية.
+                 No records match the current search options.
                 </td>
               </tr>
             ) : (
@@ -135,7 +137,7 @@ const AttendanceLogsTable = ({ logs }) => {
                 return (
                   <tr key={log.id} className="hover:bg-gray-50/50 transition-colors text-left">
                     <td className="px-6 py-4 font-medium text-slate-700">
-                      {log.employeeName || "Unknown Card"}
+                      {log.realEmployeeName}
                     </td>
                     <td className="px-6 py-4 text-gray-500 font-mono text-xs">
                       {log.rfidTag}

@@ -17,6 +17,7 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   
   const [logs, setLogs] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [systemStatus, setSystemStatus] = useState({ status: 'offline', isPairingMode: false });
 
@@ -32,6 +33,7 @@ const Dashboard = () => {
         setUser(currentUser);
         setLoading(false);
 
+        // الاستماع لسجلات الحضور
         const qLogs = query(collection(db, "attendance_logs"), orderBy("timestamp", "desc"));
         unsubscribeLogs = onSnapshot(qLogs, (snapshot) => {
           const logsData = [];
@@ -42,6 +44,11 @@ const Dashboard = () => {
         });
 
         unsubscribeEmployees = onSnapshot(collection(db, "employees"), (snapshot) => {
+          const employeesData = [];
+          snapshot.forEach((doc) => {
+            employeesData.push({ id: doc.id, ...doc.data() });
+          });
+          setEmployees(employeesData);
           setTotalEmployees(snapshot.size);
         });
 
@@ -52,7 +59,7 @@ const Dashboard = () => {
         });
 
       } else {
-        router.push('/login');
+        router.push('/register');
       }
     });
 
@@ -74,43 +81,47 @@ const Dashboard = () => {
     }
   };
 
-  // 1. الخوارزمية الذكية لمعالجة حالة الدخول والانصراف تلقائياً
   const processedLogs = useMemo(() => {
     if (!logs.length) return [];
     
-    // ترتيب السجلات من الأقدم للأحدث لمعالجتها زمنياً بشكل صحيح
     const chronologicalLogs = [...logs].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    const tracker = {}; // كائن سيتتبع حالة كل موظف في كل يوم محدد
+    const tracker = {};
 
     const annotatedLogs = chronologicalLogs.map(log => {
       const dateStr = new Date(log.timestamp).toDateString();
       const empKey = `${log.employeeId || log.rfidTag}_${dateStr}`; 
 
-      // إذا لم يكن له سجل اليوم، أو كان آخر سجل له هو "انصراف" -> إذن هذه المسحة "دخول"
+      const matchedEmployee = employees.find(
+        emp => emp.rfidTag?.trim().toUpperCase() === log.rfidTag?.trim().toUpperCase()
+      );
+      const realName = matchedEmployee ? matchedEmployee.name : (log.employeeName || "Unknown Card");
+
+      let currentStatus = 'Check-in';
       if (!tracker[empKey] || tracker[empKey] === 'Check-out') {
         tracker[empKey] = 'Check-in';
-        return { ...log, computedStatus: 'Check-in' };
+        currentStatus = 'Check-in';
       } else {
-        // أما إذا كان السجل السابق "دخول" -> إذن هذه المسحة "انصراف"
         tracker[empKey] = 'Check-out';
-        return { ...log, computedStatus: 'Check-out' };
+        currentStatus = 'Check-out';
       }
+
+      return { 
+        ...log, 
+        computedStatus: currentStatus,
+        realEmployeeName: realName
+      };
     });
 
-    // إعادة ترتيب السجلات من الأحدث للأقدم لعرضها في الجدول
     return annotatedLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  }, [logs]);
+  }, [logs, employees]);
 
-  // 2. تحديث عداد الحاضرين اليوم بشكل ديناميكي وذكي
   const presentTodayCount = useMemo(() => {
     const todayStr = new Date().toDateString();
     let count = 0;
     
-    // فلترة السجلات لليوم الحالي فقط
     const todayLogs = processedLogs.filter(log => new Date(log.timestamp).toDateString() === todayStr);
     const latestStatus = {};
     
-    // إيجاد آخر حالة لكل موظف اليوم (بما أن المصفوفة مرتبة تنازلياً، فأول سجل نقابله هو الأحدث)
     todayLogs.forEach(log => {
       const empKey = log.employeeId || log.rfidTag;
       if (!latestStatus[empKey]) {
@@ -118,7 +129,6 @@ const Dashboard = () => {
       }
     });
 
-    // الموظف يعتبر حاضراً فقط إذا كانت حالته الأخيرة هي "دخول" (Check-in)
     Object.values(latestStatus).forEach(status => {
       if (status === 'Check-in') count++;
     });
@@ -238,7 +248,6 @@ const Dashboard = () => {
           </div>
         </header>
 
-        {/* التعديل الجوهري: إدارة عرض التبويبات الثلاثة بدقة */}
         {activeTab === 'dashboard' ? (
           <>
             {/* Stats Cards */}
@@ -270,7 +279,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Real-time Logs Table */}
+            {/* Real-time Logs Table (Dashboard Preview) */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="p-5 sm:p-6 border-b border-gray-50">
                 <h4 className="font-bold text-slate-800 text-base sm:text-lg">Recent Attendance Logs</h4>
@@ -297,7 +306,7 @@ const Dashboard = () => {
                       processedLogs.map((log) => (
                         <tr key={log.id} className="hover:bg-gray-50/50 transition-colors">
                           <td className="px-4 sm:px-6 py-3 sm:py-4 font-medium text-slate-700">
-                            {log.employeeName || "Unknown Card"}
+                            {log.realEmployeeName}
                           </td>
                           <td className="px-4 sm:px-6 py-3 sm:py-4 text-gray-500 font-mono">
                             {log.rfidTag}
@@ -323,7 +332,7 @@ const Dashboard = () => {
         ) : activeTab === 'employees' ? (
           <EmployeesTable />
         ) : (
-          <AttendanceLogsTable logs={processedLogs} />
+          <AttendanceLogsTable logs={processedLogs} employees={employees} />
         )}
         
       </main>

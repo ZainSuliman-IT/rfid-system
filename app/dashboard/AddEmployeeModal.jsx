@@ -14,20 +14,35 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
 
-
   useEffect(() => {
     if (!isScanning) return;
 
     const docRef = doc(db, "system_settings", "hardware_status");
-    updateDoc(docRef, { isPairingMode: true, pendingTag: "" });
+
+    const activatePairing = async () => {
+      try {
+        await setDoc(docRef, { 
+          isPairingMode: true, 
+          pendingTag: "" 
+        }, { merge: true });
+        
+      } catch (error) {
+        console.error("Error activating pairing mode:", error);
+        setMessage({ text: 'فشل الاتصال بالخادم لتفعيل وضع الاقتران', type: 'error' });
+        setIsScanning(false);
+      }
+    };
+
+    activatePairing();
 
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.pendingTag) {
+        if (data.pendingTag && data.pendingTag !== "") {
           setRfidTag(data.pendingTag);
           setIsScanning(false);
           setMessage({ text: 'Card number successfully captured!', type: 'success' });
+          
           updateDoc(docRef, { isPairingMode: false, pendingTag: "" });
         }
       }
@@ -81,6 +96,12 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleCancelScan = async () => {
+    setIsScanning(false);
+    const docRef = doc(db, "system_settings", "hardware_status");
+    await updateDoc(docRef, { isPairingMode: false, pendingTag: "" });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -115,7 +136,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Email Address</label>
             <input 
-              type="email" placeholder="example@company.com" value={email} onChange={(e) => setEmail(e.target.value)}
+              type="type" placeholder="example@company.com" value={email} onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all text-left"
             />
           </div>
@@ -141,18 +162,24 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
                 type="text" placeholder="Scan the card or type it here" value={rfidTag} onChange={(e) => setRfidTag(e.target.value)}
                 className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary focus:bg-white transition-all text-left font-mono"
               />
-              <button
-                type="button"
-                onClick={() => setIsScanning(true)}
-                disabled={isScanning}
-                className={`px-3 py-2 text-xs font-medium rounded-xl border transition-all ${
-                  isScanning 
-                    ? 'bg-purple-50 border-purple-200 text-purple-600 animate-pulse' 
-                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {isScanning ? 'Waiting for card...' : 'Read with RFID'}
-              </button>
+              
+              {isScanning ? (
+                <button
+                  type="button"
+                  onClick={handleCancelScan}
+                  className="px-3 py-2 text-xs font-medium rounded-xl border bg-red-50 border-red-200 text-red-600 animate-pulse hover:bg-red-100 transition-all"
+                >
+                  Cancel Scan
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsScanning(true)}
+                  className="px-3 py-2 text-xs font-medium rounded-xl border bg-white border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+                >
+                  Read with RFID
+                </button>
+              )}
             </div>
           </div>
 
@@ -168,7 +195,7 @@ const AddEmployeeModal = ({ isOpen, onClose }) => {
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-50">
             <button 
-              type="submit" disabled={submitLoading}
+              type="submit" disabled={submitLoading || isScanning}
               className="flex-1 bg-primary hover:bg-primary/90 text-white font-medium py-2.5 rounded-xl text-sm transition-all shadow-md active:scale-95 disabled:opacity-50"
             >
               {submitLoading ? 'Saving...' : 'Save Data'}

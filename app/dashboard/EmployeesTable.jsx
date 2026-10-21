@@ -7,7 +7,6 @@ const EmployeesTable = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // جلب بيانات الموظفين بشكل حي
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "employees"), (snapshot) => {
       const empData = [];
@@ -21,7 +20,6 @@ const EmployeesTable = () => {
     return () => unsubscribe();
   }, []);
 
-  // دالة حذف موظف
   const handleDelete = async (id, name) => {
     if (window.confirm(`هل أنت متأكد من حذف بيانات الموظف: ${name}؟\nهذا الإجراء لا يمكن التراجع عنه.`)) {
       try {
@@ -33,7 +31,6 @@ const EmployeesTable = () => {
     }
   };
 
-  // دالة إيقاف/تفعيل بطاقة الموظف (Suspend/Activate)
   const toggleStatus = async (id, currentStatus) => {
     try {
       const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
@@ -52,7 +49,7 @@ const EmployeesTable = () => {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-in fade-in duration-300">
       <div className="p-5 sm:p-6 border-b border-gray-50 flex justify-between items-center">
-        <h4 className="font-bold text-slate-800 text-base sm:text-lg">إدارة الموظفين ({employees.length})</h4>
+        <h4 className="font-bold text-slate-800 text-base sm:text-lg">Employees Managment({employees.length})</h4>
       </div>
       
       <div className="w-full overflow-x-auto">
@@ -94,13 +91,13 @@ const EmployeesTable = () => {
                       onClick={() => toggleStatus(emp.id, emp.status)}
                       className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-all"
                     >
-                      {emp.status === 'active' ? 'إيقاف' : 'تفعيل'}
+                      {emp.status === 'active' ? 'Deactivate' : 'Activate'}
                     </button>
                     <button 
                       onClick={() => handleDelete(emp.id, emp.name)}
                       className="px-3 py-1.5 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 rounded-lg text-xs font-medium transition-all"
                     >
-                      حذف
+                      Delete
                     </button>
                   </td>
                 </tr>
